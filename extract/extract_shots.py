@@ -1,6 +1,8 @@
 """
-Extract shot-level data for the Premier League from Understat.
+Extract shot-level data from Understat.
+Supports multiple leagues and seasons.
 """
+import argparse
 import json
 import time
 from datetime import datetime
@@ -8,7 +10,7 @@ from pathlib import Path
 from understatapi import UnderstatClient
 
 
-def extract_shot_data(season="2024", league="EPL"):
+def extract_shot_data(season="2025", league="EPL"):
     """
     Extract shot data for all matches in a given season.
     
@@ -59,14 +61,16 @@ def extract_shot_data(season="2024", league="EPL"):
                         if isinstance(team_shots, list):
                             for shot in team_shots:
                                 if isinstance(shot, dict):
-                                    # Add match_id to each shot for reference
+                                    # Add match_id and league_name to each shot
                                     shot['match_id'] = match_id
+                                    shot['league_name'] = league
                                     match_shots.append(shot)
                 elif isinstance(shots_data, list):
                     # If it's already a list, use it directly
                     for shot in shots_data:
                         if isinstance(shot, dict):
                             shot['match_id'] = match_id
+                            shot['league_name'] = league
                             match_shots.append(shot)
                 
                 all_shots.extend(match_shots)
@@ -83,20 +87,22 @@ def extract_shot_data(season="2024", league="EPL"):
     return all_shots
 
 
-def save_shot_data(shots, output_dir="data/raw"):
+def save_shot_data(shots, league="EPL", season="2025", output_dir="data/raw"):
     """
     Save shot data to JSON file.
     
     Args:
         shots: List of shot data dictionaries
+        league: League code for filename
+        season: Season year for filename
         output_dir: Directory to save the file
     """
     # Create output directory if it doesn't exist
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     
-    # Generate filename with current date
+    # Generate filename with league, season, and current date
     date_str = datetime.now().strftime("%Y%m%d")
-    filename = f"{output_dir}/shots_{date_str}.json"
+    filename = f"{output_dir}/shots_{league}_{season}_{date_str}.json"
     
     # Save to JSON
     with open(filename, 'w', encoding='utf-8') as f:
@@ -108,12 +114,17 @@ def save_shot_data(shots, output_dir="data/raw"):
 
 def main():
     """Main execution function."""
+    parser = argparse.ArgumentParser(description='Extract shot data from Understat')
+    parser.add_argument('--season', type=str, default='2025', help='Season year (e.g., 2024)')
+    parser.add_argument('--league', type=str, default='EPL', help='League code (e.g., EPL, La_Liga, Bundesliga)')
+    args = parser.parse_args()
+
     try:
         # Extract data
-        shots = extract_shot_data(season="2025", league="EPL")
+        shots = extract_shot_data(season=args.season, league=args.league)
         
         # Save to file
-        filename = save_shot_data(shots)
+        filename = save_shot_data(shots, league=args.league, season=args.season)
         
         print(f"\n✓ Shot extraction complete!")
         print(f"  - Shots extracted: {len(shots)}")

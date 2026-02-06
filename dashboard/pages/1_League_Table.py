@@ -7,12 +7,17 @@ from utils.queries import get_teams_data, calculate_league_table, calculate_xg_t
 
 st.set_page_config(page_title="League Table", page_icon="🏆", layout="wide")
 
-st.title("🏆 Premier League Table")
+# Get league/season from session state (set in app.py sidebar)
+league_name = st.session_state.get("league_name")
+season = st.session_state.get("season")
+league_display = league_name or "League"
+
+st.title(f"🏆 {league_display} Table")
 st.markdown("Compare the actual league standings with xG-based projections to identify over and underperforming teams.")
 
 # Load team data
 try:
-    teams_df = get_teams_data()
+    teams_df = get_teams_data(league_name=league_name, season=season)
     
     if teams_df.empty:
         st.warning("No team data available. Please run the extraction scripts first.")

@@ -12,10 +12,14 @@ st.set_page_config(page_title="Match Analysis", page_icon="🔮", layout="wide")
 st.title("🔮 Match Analysis")
 st.markdown("Analyze individual matches and compare actual results with xG expectations.")
 
+# Get league/season from session state (set in app.py sidebar)
+league_name = st.session_state.get("league_name")
+season = st.session_state.get("season")
+
 # Load data
 try:
-    matches_df = get_matches_data()
-    shots_df = get_shots_data()
+    matches_df = get_matches_data(league_name=league_name, season=season)
+    shots_df = get_shots_data(league_name=league_name, season=season)
     
     if matches_df.empty:
         st.warning("No match data available. Please run `python -m extract.extract_matches` first.")

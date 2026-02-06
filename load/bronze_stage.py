@@ -1,12 +1,13 @@
 """
 Bronze Stage Loader - Load extracted data to stg_* tables.
-Uses TRUNCATE + INSERT strategy for incremental landing zone.
+Uses DELETE + INSERT strategy (scoped by league_name/season) for the landing zone.
 All tables in premier_league_stats schema.
+Supports multiple leagues and seasons.
 """
 import json
 import os
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 import psycopg2
 from psycopg2.extras import execute_batch, Json
@@ -90,14 +91,26 @@ def prepare_values(data: List[Dict[str, Any]], columns: List[str]) -> List[tuple
     return values_list
 
 
-def load_to_stage(table_name: str, data: List[Dict[str, Any]], columns: List[str]):
+def load_to_stage(
+    table_name: str,
+    data: List[Dict[str, Any]],
+    columns: List[str],
+    league_name: Optional[str] = None,
+    season: Optional[str] = None,
+):
     """
-    Load data to stg_* table using TRUNCATE + INSERT.
+    Load data to stg_* table using DELETE (scoped) + INSERT.
+
+    When league_name and season are provided, only rows matching that
+    league/season are deleted before inserting. Otherwise falls back to
+    TRUNCATE for backward compatibility.
 
     Args:
         table_name: Name of the stage table (without stg_ prefix)
         data: List of dictionaries containing row data
         columns: List of column names to insert
+        league_name: Optional league to scope the delete
+        season: Optional season to scope the delete
     """
     if not data:
         print(f"  Warning: No data to load for stg_{table_name}")
@@ -110,8 +123,19 @@ def load_to_stage(table_name: str, data: List[Dict[str, Any]], columns: List[str
         conn = get_connection()
         cursor = conn.cursor()
 
-        # Truncate stage table
-        cursor.execute(f"TRUNCATE {full_table}")
+        # Scoped delete: only remove rows for this league/season
+        if league_name and season:
+            cursor.execute(
+                f'DELETE FROM {full_table} WHERE "league_name" = %s AND "season" = %s',
+                (league_name, season),
+            )
+        elif league_name:
+            cursor.execute(
+                f'DELETE FROM {full_table} WHERE "league_name" = %s',
+                (league_name,),
+            )
+        else:
+            cursor.execute(f"TRUNCATE {full_table}")
 
         # Prepare insert query
         placeholders = ', '.join(['%s'] * len(columns))
@@ -143,6 +167,13 @@ def load_to_stage(table_name: str, data: List[Dict[str, Any]], columns: List[str
             return_connection(conn)
 
 
+def _detect_league_season(data: List[Dict[str, Any]]):
+    """Extract league_name and season from the first record if present."""
+    if data and isinstance(data[0], dict):
+        return data[0].get('league_name'), data[0].get('season')
+    return None, None
+
+
 def load_teams_stage(filename: str) -> int:
     """Load team data to stg_teams."""
     print(f"Loading teams to stage from {filename}...")
@@ -156,8 +187,10 @@ def load_teams_stage(filename: str) -> int:
     else:
         teams = teams_data
 
-    columns = ['id', 'title', 'history']
-    count = load_to_stage('teams', teams, columns)
+    league_name, season = _detect_league_season(teams)
+
+    columns = ['id', 'title', 'history', 'league_name', 'season']
+    count = load_to_stage('teams', teams, columns, league_name=league_name, season=season)
     print(f"  Loaded {count} teams to stg_teams")
     return count
 
@@ -169,12 +202,15 @@ def load_players_stage(filename: str) -> int:
     with open(filename, 'r', encoding='utf-8') as f:
         players = json.load(f)
 
+    league_name, season = _detect_league_season(players)
+
     columns = [
         'id', 'player_name', 'games', 'time', 'goals', 'xG', 'assists', 'xA',
         'shots', 'key_passes', 'yellow_cards', 'red_cards', 'position',
-        'team_title', 'npg', 'npxG', 'xGChain', 'xGBuildup'
+        'team_title', 'npg', 'npxG', 'xGChain', 'xGBuildup',
+        'league_name', 'season'
     ]
-    count = load_to_stage('players', players, columns)
+    count = load_to_stage('players', players, columns, league_name=league_name, season=season)
     print(f"  Loaded {count} players to stg_players")
     return count
 
@@ -186,8 +222,11 @@ def load_matches_stage(filename: str) -> int:
     with open(filename, 'r', encoding='utf-8') as f:
         matches = json.load(f)
 
-    columns = ['id', 'isResult', 'h', 'a', 'goals', 'xG', 'datetime', 'forecast']
-    count = load_to_stage('matches', matches, columns)
+    league_name, season = _detect_league_season(matches)
+
+    columns = ['id', 'isResult', 'h', 'a', 'goals', 'xG', 'datetime', 'forecast',
+               'league_name', 'season']
+    count = load_to_stage('matches', matches, columns, league_name=league_name, season=season)
     print(f"  Loaded {count} matches to stg_matches")
     return count
 
@@ -199,12 +238,15 @@ def load_shots_stage(filename: str) -> int:
     with open(filename, 'r', encoding='utf-8') as f:
         shots = json.load(f)
 
+    league_name, season = _detect_league_season(shots)
+
     columns = [
         'id', 'minute', 'result', 'X', 'Y', 'xG', 'player', 'h_a', 'player_id',
         'situation', 'season', 'shotType', 'match_id', 'h_team', 'a_team',
-        'h_goals', 'a_goals', 'date', 'player_assisted', 'lastAction'
+        'h_goals', 'a_goals', 'date', 'player_assisted', 'lastAction',
+        'league_name'
     ]
-    count = load_to_stage('shots', shots, columns)
+    count = load_to_stage('shots', shots, columns, league_name=league_name, season=season)
     print(f"  Loaded {count} shots to stg_shots")
     return count
 
@@ -216,8 +258,11 @@ def load_rosters_stage(filename: str) -> int:
     with open(filename, 'r', encoding='utf-8') as f:
         rosters = json.load(f)
 
-    columns = ['match_id', 'home_team', 'away_team', 'datetime', 'home_roster', 'away_roster']
-    count = load_to_stage('rosters', rosters, columns)
+    league_name, season = _detect_league_season(rosters)
+
+    columns = ['match_id', 'home_team', 'away_team', 'datetime', 'home_roster', 'away_roster',
+               'league_name', 'season']
+    count = load_to_stage('rosters', rosters, columns, league_name=league_name, season=season)
     print(f"  Loaded {count} rosters to stg_rosters")
     return count
 
@@ -229,8 +274,10 @@ def load_team_context_stage(filename: str) -> int:
     with open(filename, 'r', encoding='utf-8') as f:
         team_context = json.load(f)
 
-    columns = ['team_name', 'season', 'context_stats']
-    count = load_to_stage('team_context', team_context, columns)
+    league_name, season = _detect_league_season(team_context)
+
+    columns = ['team_name', 'season', 'league_name', 'context_stats']
+    count = load_to_stage('team_context', team_context, columns, league_name=league_name, season=season)
     print(f"  Loaded {count} team_context records to stg_team_context")
     return count
 
@@ -238,6 +285,9 @@ def load_team_context_stage(filename: str) -> int:
 def load_all_to_stage(data_dir: str = "data/raw") -> Dict[str, int]:
     """
     Load all data files from a directory to stg_* tables.
+
+    Supports both old filename format (e.g., teams_20260205.json) and
+    new multi-league format (e.g., teams_EPL_2025_20260205.json).
 
     Args:
         data_dir: Directory containing JSON data files
@@ -248,7 +298,7 @@ def load_all_to_stage(data_dir: str = "data/raw") -> Dict[str, int]:
     data_path = Path(data_dir)
     results = {}
 
-    # Find the most recent files
+    # Find the most recent files (glob matches both old and new naming)
     file_patterns = {
         'teams': 'teams_*.json',
         'players': 'players_*.json',

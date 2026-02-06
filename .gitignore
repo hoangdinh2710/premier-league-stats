@@ -38,4 +38,4 @@ supabase/
 
 .cursor/
 
-migrations/
+# migrations/ -- removed: migration SQL files should be tracked

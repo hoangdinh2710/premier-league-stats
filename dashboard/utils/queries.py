@@ -2,6 +2,7 @@
 SQL queries and data fetching utilities for the dashboard.
 Supports both Supabase (cloud) and local JSON files (development).
 Updated to work with Silver schema (normalized tables).
+Supports multi-league and multi-season filtering.
 
 Schema Configuration:
 - Set DB_SCHEMA in .env file (defaults to 'premier_league_stats')
@@ -72,14 +73,22 @@ def get_schema():
 
 
 @st.cache_data(ttl=300)
-def fetch_from_supabase(table_name: str, select_query: str = "*") -> list:
+def fetch_from_supabase(
+    table_name: str,
+    select_query: str = "*",
+    league_name: str = None,
+    season: str = None,
+) -> list:
     """
     Fetch data from Supabase table with caching.
     Queries from the schema specified in DB_SCHEMA env var.
+    Optionally filters by league_name and/or season.
 
     Args:
         table_name: Name of the table to fetch (without schema prefix)
         select_query: Columns to select (default: "*")
+        league_name: Optional league filter (e.g., "EPL")
+        season: Optional season filter (e.g., "2025")
 
     Returns:
         List of records or empty list
@@ -91,11 +100,66 @@ def fetch_from_supabase(table_name: str, select_query: str = "*") -> list:
     try:
         # Get schema and chain it with the query
         schema = get_schema()
-        response = client.schema(schema).table(table_name).select(select_query).execute()
+        query = client.schema(schema).table(table_name).select(select_query)
+
+        # Apply optional filters
+        if league_name:
+            query = query.eq("league_name", league_name)
+        if season:
+            query = query.eq("season", season)
+
+        response = query.execute()
         return response.data if response.data else []
     except Exception as e:
         st.warning(f"Supabase fetch error: {e}")
         return []
+
+
+def get_available_leagues_and_seasons() -> tuple:
+    """
+    Fetch distinct league_name and season values from the database.
+
+    Returns:
+        Tuple of (leagues list, seasons list)
+    """
+    leagues = ["EPL"]
+    seasons = ["2025"]
+
+    client = get_supabase_client()
+    if not client:
+        return leagues, seasons
+
+    try:
+        schema = get_schema()
+
+        # Fetch distinct leagues from silver_dim_teams
+        league_resp = (
+            client.schema(schema)
+            .table("silver_dim_teams")
+            .select("league_name")
+            .execute()
+        )
+        if league_resp.data:
+            found_leagues = sorted(set(r["league_name"] for r in league_resp.data if r.get("league_name")))
+            if found_leagues:
+                leagues = found_leagues
+
+        # Fetch distinct seasons
+        season_resp = (
+            client.schema(schema)
+            .table("silver_dim_teams")
+            .select("season")
+            .execute()
+        )
+        if season_resp.data:
+            found_seasons = sorted(set(r["season"] for r in season_resp.data if r.get("season")), reverse=True)
+            if found_seasons:
+                seasons = found_seasons
+
+    except Exception:
+        pass
+
+    return leagues, seasons
 
 
 def load_json_data(filename):
@@ -158,13 +222,21 @@ def normalize_team_columns(df):
     return df
 
 
-def get_teams_data():
+def get_teams_data(league_name: str = None, season: str = None):
     """
     Get team data as DataFrame from Silver schema.
     Aggregates data from silver_fact_team_match_stats.
+
+    Args:
+        league_name: Optional league filter (e.g., "EPL")
+        season: Optional season filter (e.g., "2025")
     """
     # Try Supabase Silver schema first
-    supabase_data = fetch_from_supabase("silver_fact_team_match_stats")
+    supabase_data = fetch_from_supabase(
+        "silver_fact_team_match_stats",
+        league_name=league_name,
+        season=season,
+    )
 
     if supabase_data:
         # Aggregate team statistics from match-level data
@@ -281,13 +353,21 @@ def get_teams_data():
     return df
 
 
-def get_players_data():
+def get_players_data(league_name: str = None, season: str = None):
     """
     Get player data as DataFrame from Silver schema.
     Uses silver_fact_player_stats table.
+
+    Args:
+        league_name: Optional league filter (e.g., "EPL")
+        season: Optional season filter (e.g., "2025")
     """
     # Try Supabase Silver schema first
-    supabase_data = fetch_from_supabase("silver_fact_player_stats")
+    supabase_data = fetch_from_supabase(
+        "silver_fact_player_stats",
+        league_name=league_name,
+        season=season,
+    )
 
     if supabase_data:
         df = pd.DataFrame(supabase_data)
@@ -334,13 +414,21 @@ def get_players_data():
     return df
 
 
-def get_matches_data():
+def get_matches_data(league_name: str = None, season: str = None):
     """
     Get match data as DataFrame from Silver schema.
     Uses silver_fact_matches table.
+
+    Args:
+        league_name: Optional league filter (e.g., "EPL")
+        season: Optional season filter (e.g., "2025")
     """
     # Try Supabase Silver schema first
-    supabase_data = fetch_from_supabase("silver_fact_matches")
+    supabase_data = fetch_from_supabase(
+        "silver_fact_matches",
+        league_name=league_name,
+        season=season,
+    )
 
     if supabase_data:
         df = pd.DataFrame(supabase_data)
@@ -426,13 +514,21 @@ def get_matches_data():
     return df
 
 
-def get_shots_data():
+def get_shots_data(league_name: str = None, season: str = None):
     """
     Get shot data as DataFrame from Silver schema.
     Uses silver_fact_shots table.
+
+    Args:
+        league_name: Optional league filter (e.g., "EPL")
+        season: Optional season filter (e.g., "2025")
     """
     # Try Supabase Silver schema first
-    supabase_data = fetch_from_supabase("silver_fact_shots")
+    supabase_data = fetch_from_supabase(
+        "silver_fact_shots",
+        league_name=league_name,
+        season=season,
+    )
 
     if supabase_data:
         df = pd.DataFrame(supabase_data)

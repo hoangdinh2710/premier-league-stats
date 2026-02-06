@@ -1,15 +1,21 @@
 """
-Premier League xG Analytics Dashboard
+Football xG Analytics Dashboard
 
-A comprehensive dashboard for analyzing Premier League performance using 
+A comprehensive dashboard for analyzing football performance using 
 Expected Goals (xG) metrics from Understat.
+Supports multiple leagues and seasons.
 """
 import streamlit as st
-from utils.queries import get_teams_data, get_players_data, get_matches_data
+from utils.queries import (
+    get_teams_data,
+    get_players_data,
+    get_matches_data,
+    get_available_leagues_and_seasons,
+)
 
 # Page configuration
 st.set_page_config(
-    page_title="Premier League xG Analytics",
+    page_title="Football xG Analytics",
     page_icon="⚽",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -39,17 +45,54 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# ---- Sidebar: League & Season selectors ----
+available_leagues, available_seasons = get_available_leagues_and_seasons()
+
+# League display names mapping
+LEAGUE_DISPLAY = {
+    "EPL": "Premier League",
+    "La_Liga": "La Liga",
+    "Bundesliga": "Bundesliga",
+    "Serie_A": "Serie A",
+    "Ligue_1": "Ligue 1",
+    "RFPL": "Russian Premier League",
+}
+
+with st.sidebar:
+    st.header("Filters")
+
+    selected_league = st.selectbox(
+        "League",
+        options=available_leagues,
+        format_func=lambda x: LEAGUE_DISPLAY.get(x, x),
+        index=0,
+    )
+
+    selected_season = st.selectbox(
+        "Season",
+        options=available_seasons,
+        format_func=lambda s: f"{s}/{int(s)+1}" if s.isdigit() else s,
+        index=0,
+    )
+
+# Store in session state so pages can access them
+st.session_state["league_name"] = selected_league
+st.session_state["season"] = selected_season
+
+league_display = LEAGUE_DISPLAY.get(selected_league, selected_league)
+season_display = f"{selected_season}/{int(selected_season)+1}" if selected_season.isdigit() else selected_season
+
 # Main header
-st.markdown('<div class="main-header">⚽ Premier League xG Analytics</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Expected Goals Analysis for the 2024/25 Season</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="main-header">⚽ {league_display} xG Analytics</div>', unsafe_allow_html=True)
+st.markdown(f'<div class="sub-header">Expected Goals Analysis for the {season_display} Season</div>', unsafe_allow_html=True)
 
 # Introduction
-st.markdown("""
+st.markdown(f"""
 ---
 
-### Welcome to the Premier League xG Analytics Dashboard! 🎯
+### Welcome to the Football xG Analytics Dashboard! 🎯
 
-This dashboard provides comprehensive analysis of Premier League performance using **Expected Goals (xG)** 
+This dashboard provides comprehensive analysis of **{league_display}** performance using **Expected Goals (xG)** 
 metrics from Understat. xG is a statistical measure that quantifies the quality of goal-scoring chances, 
 helping us understand which teams and players are performing above or below expectations.
 
@@ -68,9 +111,9 @@ Navigate using the sidebar to explore different pages! ⬅️
 
 # Load data for summary metrics
 try:
-    teams_df = get_teams_data()
-    players_df = get_players_data()
-    matches_df = get_matches_data()
+    teams_df = get_teams_data(league_name=selected_league, season=selected_season)
+    players_df = get_players_data(league_name=selected_league, season=selected_season)
+    matches_df = get_matches_data(league_name=selected_league, season=selected_season)
     
     # Display key metrics
     st.subheader("📊 Season Overview")
@@ -106,11 +149,9 @@ try:
         st.warning("⚠️ No data found. Please run the extraction scripts first.")
         st.info("""
         **To get started:**
-        1. Run `python -m extract.extract_league`
-        2. Run `python -m extract.extract_players`
-        3. Run `python -m extract.extract_matches`
-        4. Run `python -m extract.extract_shots` (optional, takes longer)
-        5. Refresh this page
+        1. Run `python orchestrate.py --league EPL --season 2025`
+        2. Or run individual extract scripts with `--league` and `--season` flags
+        3. Refresh this page
         """)
 
 except Exception as e:
