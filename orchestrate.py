@@ -26,7 +26,6 @@ def run_extract(season: int = None):
         'extract/extract_matches.py',
         'extract/extract_shots.py',
         'extract/extract_rosters.py',
-        'extract/extract_player_grouped.py',
         'extract/extract_team_context.py',
     ]
 

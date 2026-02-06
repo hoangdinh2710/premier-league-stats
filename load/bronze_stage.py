@@ -222,19 +222,6 @@ def load_rosters_stage(filename: str) -> int:
     return count
 
 
-def load_player_grouped_stage(filename: str) -> int:
-    """Load grouped player data to stg_player_grouped."""
-    print(f"Loading player_grouped to stage from {filename}...")
-
-    with open(filename, 'r', encoding='utf-8') as f:
-        player_grouped = json.load(f)
-
-    columns = ['player_id', 'player_name', 'team', 'position', 'games', 'time', 'grouped_stats']
-    count = load_to_stage('player_grouped', player_grouped, columns)
-    print(f"  Loaded {count} player_grouped records to stg_player_grouped")
-    return count
-
-
 def load_team_context_stage(filename: str) -> int:
     """Load team context data to stg_team_context."""
     print(f"Loading team_context to stage from {filename}...")
@@ -268,7 +255,6 @@ def load_all_to_stage(data_dir: str = "data/raw") -> Dict[str, int]:
         'matches': 'matches_*.json',
         'shots': 'shots_*.json',
         'rosters': 'rosters_*.json',
-        'player_grouped': 'player_grouped_*.json',
         'team_context': 'team_context_*.json',
     }
 
@@ -278,7 +264,6 @@ def load_all_to_stage(data_dir: str = "data/raw") -> Dict[str, int]:
         'matches': load_matches_stage,
         'shots': load_shots_stage,
         'rosters': load_rosters_stage,
-        'player_grouped': load_player_grouped_stage,
         'team_context': load_team_context_stage,
     }
 

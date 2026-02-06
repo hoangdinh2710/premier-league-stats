@@ -11,7 +11,6 @@ SET search_path TO premier_league_stats, public;
 DROP TABLE IF EXISTS premier_league_stats.raw_shots CASCADE;
 DROP TABLE IF EXISTS premier_league_stats.raw_matches CASCADE;
 DROP TABLE IF EXISTS premier_league_stats.raw_players CASCADE;
-DROP TABLE IF EXISTS premier_league_stats.raw_player_grouped CASCADE;
 DROP TABLE IF EXISTS premier_league_stats.raw_rosters CASCADE;
 DROP TABLE IF EXISTS premier_league_stats.raw_team_context CASCADE;
 DROP TABLE IF EXISTS premier_league_stats.raw_teams CASCADE;
@@ -133,29 +132,6 @@ CREATE TRIGGER update_raw_matches_updated_at BEFORE UPDATE ON premier_league_sta
 CREATE TRIGGER update_raw_shots_updated_at BEFORE UPDATE ON premier_league_stats.raw_shots
     FOR EACH ROW EXECUTE FUNCTION premier_league_stats.update_updated_at_column();
 
--- Player Grouped Stats table (for grouped player statistics by season/position/etc)
-CREATE TABLE premier_league_stats.raw_player_grouped (
-    player_id TEXT NOT NULL,
-    player_name TEXT NOT NULL,
-    team TEXT,
-    position TEXT,
-    games TEXT,
-    time TEXT,
-    grouped_stats JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    PRIMARY KEY (player_id, team)
-);
-
--- Create indexes on player_grouped table
-CREATE INDEX idx_raw_player_grouped_player_name ON premier_league_stats.raw_player_grouped(player_name);
-CREATE INDEX idx_raw_player_grouped_team ON premier_league_stats.raw_player_grouped(team);
-
-CREATE TRIGGER update_raw_player_grouped_updated_at BEFORE UPDATE ON premier_league_stats.raw_player_grouped
-    FOR EACH ROW EXECUTE FUNCTION premier_league_stats.update_updated_at_column();
-
-COMMENT ON TABLE premier_league_stats.raw_player_grouped IS 'Grouped player statistics by season and other dimensions from Understat API';
-
 -- Rosters table (for match rosters/lineups)
 CREATE TABLE premier_league_stats.raw_rosters (
     match_id TEXT PRIMARY KEY,
@@ -199,7 +175,6 @@ COMMENT ON TABLE premier_league_stats.raw_team_context IS 'Team statistics group
 -- Grant permissions (adjust as needed for your Supabase setup)
 -- ALTER TABLE premier_league_stats.raw_teams ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE premier_league_stats.raw_players ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE premier_league_stats.raw_player_grouped ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE premier_league_stats.raw_matches ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE premier_league_stats.raw_rosters ENABLE ROW LEVEL SECURITY;
 -- ALTER TABLE premier_league_stats.raw_shots ENABLE ROW LEVEL SECURITY;

@@ -102,10 +102,6 @@ TABLE_CONFIGS = {
         'columns': ['match_id', 'home_team', 'away_team', 'datetime', 'home_roster', 'away_roster'],
         'pk': ['match_id'],
     },
-    'player_grouped': {
-        'columns': ['player_id', 'player_name', 'team', 'position', 'games', 'time', 'grouped_stats'],
-        'pk': ['player_id', 'team'],
-    },
     'team_context': {
         'columns': ['team_name', 'season', 'context_stats'],
         'pk': ['team_name', 'season'],

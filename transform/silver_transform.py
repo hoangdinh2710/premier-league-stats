@@ -436,7 +436,76 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             key_passes = EXCLUDED.key_passes
         """
     ),
+
+    (
+        'silver_fact_team_context',
+        f"""
+        INSERT INTO {SCHEMA}.silver_fact_team_context (
+            team_name,
+            season,
+            context_type,
+            context_label,
+            metrics
+        )
+        SELECT
+            tc.team_name,
+            tc.season,
+            ctx.key AS context_type,
+            item.value ->> ctx.key AS context_label,
+            item.value - ctx.key AS metrics
+        FROM {SCHEMA}.prod_team_context tc,
+             LATERAL jsonb_each(tc.context_stats) AS ctx(key, value),
+             LATERAL jsonb_array_elements(ctx.value) AS item(value)
+        WHERE item.value ->> ctx.key IS NOT NULL
+        ON CONFLICT (team_name, season, context_type, context_label) DO UPDATE SET
+            metrics = EXCLUDED.metrics
+        """
+    ),
 ]
+
+
+# DDL for silver tables that may not exist yet (idempotent).
+# Add CREATE TABLE IF NOT EXISTS statements here for any new silver tables.
+SILVER_DDL: List[str] = [
+    f"""
+    CREATE TABLE IF NOT EXISTS {SCHEMA}.silver_fact_team_context (
+        team_name TEXT NOT NULL,
+        season TEXT NOT NULL,
+        context_type TEXT NOT NULL,
+        context_label TEXT NOT NULL,
+        metrics JSONB NOT NULL DEFAULT '{{}}',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        PRIMARY KEY (team_name, season, context_type, context_label)
+    )
+    """,
+    f"""
+    CREATE INDEX IF NOT EXISTS idx_silver_fact_team_context_season
+        ON {SCHEMA}.silver_fact_team_context(season)
+    """,
+    f"""
+    CREATE INDEX IF NOT EXISTS idx_silver_fact_team_context_type
+        ON {SCHEMA}.silver_fact_team_context(context_type)
+    """,
+]
+
+
+def ensure_silver_tables():
+    """Create any silver tables that don't exist yet (idempotent)."""
+    conn = None
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+        for ddl in SILVER_DDL:
+            cursor.execute(ddl)
+        conn.commit()
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        raise e
+    finally:
+        if conn:
+            return_connection(conn)
 
 
 def refresh_table(table_name: str, transform_sql: str, truncate: bool = False) -> int:
@@ -489,6 +558,9 @@ def refresh_all_silver(truncate: bool = False) -> Dict[str, int]:
     print("=" * 60)
     print("Transforming Bronze Prod (prod_*) -> Silver (silver_*)")
     print("=" * 60)
+
+    # Ensure any new silver tables exist before running transforms
+    ensure_silver_tables()
 
     for table_name, transform_sql in SILVER_TRANSFORMS:
         print(f"Refreshing {table_name}...")
