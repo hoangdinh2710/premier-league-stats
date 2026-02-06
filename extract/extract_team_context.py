@@ -1,6 +1,8 @@
 """
-Extract team context/situational data for the Premier League from Understat.
+Extract team context/situational data from Understat.
+Supports multiple leagues and seasons.
 """
+import argparse
 import json
 import time
 from datetime import datetime
@@ -8,7 +10,7 @@ from pathlib import Path
 from understatapi import UnderstatClient
 
 
-def extract_team_context_data(season="2024", league="EPL"):
+def extract_team_context_data(season="2025", league="EPL"):
     """
     Extract context/situational data for all teams in a given season.
 
@@ -64,6 +66,7 @@ def extract_team_context_data(season="2024", league="EPL"):
                 team_entry = {
                     'team_name': team_name,
                     'season': season,
+                    'league_name': league,
                     'context_stats': context_data
                 }
 
@@ -84,20 +87,22 @@ def extract_team_context_data(season="2024", league="EPL"):
     return all_team_context
 
 
-def save_team_context_data(team_data, output_dir="data/raw"):
+def save_team_context_data(team_data, league="EPL", season="2025", output_dir="data/raw"):
     """
     Save team context data to JSON file.
 
     Args:
         team_data: List of team context data dictionaries
+        league: League code for filename
+        season: Season year for filename
         output_dir: Directory to save the file
     """
     # Create output directory if it doesn't exist
     Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-    # Generate filename with current date
+    # Generate filename with league, season, and current date
     date_str = datetime.now().strftime("%Y%m%d")
-    filename = f"{output_dir}/team_context_{date_str}.json"
+    filename = f"{output_dir}/team_context_{league}_{season}_{date_str}.json"
 
     # Save to JSON
     with open(filename, 'w', encoding='utf-8') as f:
@@ -109,12 +114,17 @@ def save_team_context_data(team_data, output_dir="data/raw"):
 
 def main():
     """Main execution function."""
+    parser = argparse.ArgumentParser(description='Extract team context data from Understat')
+    parser.add_argument('--season', type=str, default='2025', help='Season year (e.g., 2024)')
+    parser.add_argument('--league', type=str, default='EPL', help='League code (e.g., EPL, La_Liga, Bundesliga)')
+    args = parser.parse_args()
+
     try:
         # Extract data
-        team_context = extract_team_context_data(season="2025", league="EPL")
+        team_context = extract_team_context_data(season=args.season, league=args.league)
 
         # Save to file
-        filename = save_team_context_data(team_context)
+        filename = save_team_context_data(team_context, league=args.league, season=args.season)
 
         print(f"\nTeam context extraction complete!")
         print(f"  - Teams processed: {len(team_context)}")

@@ -1,6 +1,7 @@
 """
 Load extracted data to Supabase database using direct Postgres connection.
 Uses direct connection for better ETL performance with bulk operations.
+Supports multiple leagues and seasons.
 """
 import json
 import os
@@ -150,9 +151,8 @@ def load_teams(filename: str):
     placeholders = ', '.join(['%s'] * len(columns))
     columns_str = ', '.join([f'"{col}"' for col in columns])
     
-    # Assume first column is primary key for conflict resolution
-    # Adjust based on your actual table schema
-    conflict_cols = columns[0] if columns else 'id'
+    # Composite primary key: (id, league_name, season)
+    conflict_cols = '"id", "league_name", "season"'
     
     update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
     
@@ -206,7 +206,8 @@ def load_players(filename: str):
     placeholders = ', '.join(['%s'] * len(columns))
     columns_str = ', '.join([f'"{col}"' for col in columns])
     
-    conflict_cols = columns[0] if columns else 'id'
+    # Composite primary key: (id, league_name, season)
+    conflict_cols = '"id", "league_name", "season"'
     update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
     
     query = f"""
@@ -259,7 +260,8 @@ def load_matches(filename: str):
     placeholders = ', '.join(['%s'] * len(columns))
     columns_str = ', '.join([f'"{col}"' for col in columns])
     
-    conflict_cols = columns[0] if columns else 'id'
+    # Composite primary key: (id, league_name, season)
+    conflict_cols = '"id", "league_name", "season"'
     update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
     
     query = f"""
@@ -313,7 +315,8 @@ def load_shots(filename: str):
     placeholders = ', '.join(['%s'] * len(columns))
     columns_str = ', '.join([f'"{col}"' for col in columns])
     
-    conflict_cols = columns[0] if columns else 'id'
+    # Primary key: id (globally unique shot IDs)
+    conflict_cols = '"id"'
     update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
     
     query = f"""
@@ -372,7 +375,8 @@ def load_rosters(filename: str):
     placeholders = ', '.join(['%s'] * len(columns))
     columns_str = ', '.join([f'"{col}"' for col in columns])
     
-    conflict_cols = columns[0] if columns else 'match_id'
+    # Composite primary key: (match_id, league_name, season)
+    conflict_cols = '"match_id", "league_name", "season"'
     update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
     
     query = f"""
@@ -425,8 +429,8 @@ def load_team_context(filename: str):
     placeholders = ', '.join(['%s'] * len(columns))
     columns_str = ', '.join([f'"{col}"' for col in columns])
     
-    # Composite primary key: team_name, season
-    conflict_cols = 'team_name, season'
+    # Composite primary key: (team_name, season, league_name)
+    conflict_cols = '"team_name", "season", "league_name"'
     update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
     
     query = f"""

@@ -2,6 +2,7 @@
 Silver Transform - Transform data from prod_* to silver_* tables.
 Uses SQL-based transformations with materialized tables (UPSERT).
 All tables in premier_league_stats schema.
+Supports multiple leagues and seasons.
 """
 import os
 from typing import Dict, List, Tuple
@@ -82,12 +83,14 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
     (
         'silver_dim_teams',
         f"""
-        INSERT INTO {SCHEMA}.silver_dim_teams (team_id, team_name)
+        INSERT INTO {SCHEMA}.silver_dim_teams (team_id, team_name, league_name, season)
         SELECT
             id::int AS team_id,
-            title AS team_name
+            title AS team_name,
+            league_name,
+            season
         FROM {SCHEMA}.prod_teams
-        ON CONFLICT (team_id) DO UPDATE SET
+        ON CONFLICT (team_id, league_name, season) DO UPDATE SET
             team_name = EXCLUDED.team_name
         """
     ),
@@ -95,14 +98,16 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
     (
         'silver_dim_players',
         f"""
-        INSERT INTO {SCHEMA}.silver_dim_players (player_id, player_name, position, team_name)
+        INSERT INTO {SCHEMA}.silver_dim_players (player_id, player_name, position, team_name, league_name, season)
         SELECT
             id::int AS player_id,
             player_name,
             position,
-            team_title AS team_name
+            team_title AS team_name,
+            league_name,
+            season
         FROM {SCHEMA}.prod_players
-        ON CONFLICT (player_id) DO UPDATE SET
+        ON CONFLICT (player_id, league_name, season) DO UPDATE SET
             player_name = EXCLUDED.player_name,
             position = EXCLUDED.position,
             team_name = EXCLUDED.team_name
@@ -130,7 +135,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             away_xg,
             home_forecast,
             draw_forecast,
-            away_forecast
+            away_forecast,
+            league_name,
+            season
         )
         SELECT
             id::int AS match_id,
@@ -147,9 +154,11 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             ("xG"->>'a')::decimal(5,2) AS away_xg,
             (forecast->>'w')::decimal(5,4) AS home_forecast,
             (forecast->>'d')::decimal(5,4) AS draw_forecast,
-            (forecast->>'l')::decimal(5,4) AS away_forecast
+            (forecast->>'l')::decimal(5,4) AS away_forecast,
+            league_name,
+            season
         FROM {SCHEMA}.prod_matches
-        ON CONFLICT (match_id) DO UPDATE SET
+        ON CONFLICT (match_id, league_name, season) DO UPDATE SET
             home_team_id = EXCLUDED.home_team_id,
             away_team_id = EXCLUDED.away_team_id,
             home_team_name = EXCLUDED.home_team_name,
@@ -190,7 +199,8 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             season,
             match_date,
             home_goals,
-            away_goals
+            away_goals,
+            league_name
         )
         SELECT
             id::int AS shot_id,
@@ -212,7 +222,8 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             season::int AS season,
             date::date AS match_date,
             h_goals::int AS home_goals,
-            a_goals::int AS away_goals
+            a_goals::int AS away_goals,
+            league_name
         FROM {SCHEMA}.prod_shots
         ON CONFLICT (shot_id) DO UPDATE SET
             match_id = EXCLUDED.match_id,
@@ -233,7 +244,8 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             season = EXCLUDED.season,
             match_date = EXCLUDED.match_date,
             home_goals = EXCLUDED.home_goals,
-            away_goals = EXCLUDED.away_goals
+            away_goals = EXCLUDED.away_goals,
+            league_name = EXCLUDED.league_name
         """
     ),
 
@@ -258,7 +270,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             npg,
             npxg,
             xg_chain,
-            xg_buildup
+            xg_buildup,
+            league_name,
+            season
         )
         SELECT
             id::int AS player_id,
@@ -278,9 +292,11 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             npg::int AS npg,
             "npxG"::decimal(6,2) AS npxg,
             "xGChain"::decimal(6,2) AS xg_chain,
-            "xGBuildup"::decimal(6,2) AS xg_buildup
+            "xGBuildup"::decimal(6,2) AS xg_buildup,
+            league_name,
+            season
         FROM {SCHEMA}.prod_players
-        ON CONFLICT (player_id, team_name) DO UPDATE SET
+        ON CONFLICT (player_id, team_name, league_name, season) DO UPDATE SET
             player_name = EXCLUDED.player_name,
             position = EXCLUDED.position,
             games = EXCLUDED.games,
@@ -318,7 +334,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             ppda,
             ppda_allowed,
             deep,
-            deep_allowed
+            deep_allowed,
+            league_name,
+            season
         )
         SELECT
             t.id::int AS team_id,
@@ -346,10 +364,12 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
                 ELSE NULL
             END AS ppda_allowed,
             (h->>'deep')::int AS deep,
-            (h->>'deep_allowed')::int AS deep_allowed
+            (h->>'deep_allowed')::int AS deep_allowed,
+            t.league_name,
+            t.season
         FROM {SCHEMA}.prod_teams t,
              LATERAL jsonb_array_elements(t.history) AS h
-        ON CONFLICT (team_id, match_date) DO UPDATE SET
+        ON CONFLICT (team_id, match_date, league_name, season) DO UPDATE SET
             team_name = EXCLUDED.team_name,
             opponent = EXCLUDED.opponent,
             is_home = EXCLUDED.is_home,
@@ -383,7 +403,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             xg,
             xa,
             shots,
-            key_passes
+            key_passes,
+            league_name,
+            season
         )
         -- Home roster
         SELECT
@@ -400,7 +422,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             (p.value->>'xG')::decimal(5,2) AS xg,
             (p.value->>'xA')::decimal(5,2) AS xa,
             (p.value->>'shots')::int AS shots,
-            (p.value->>'key_passes')::int AS key_passes
+            (p.value->>'key_passes')::int AS key_passes,
+            r.league_name,
+            r.season
         FROM {SCHEMA}.prod_rosters r,
              LATERAL jsonb_each(r.home_roster) AS p
         UNION ALL
@@ -419,7 +443,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             (p.value->>'xG')::decimal(5,2) AS xg,
             (p.value->>'xA')::decimal(5,2) AS xa,
             (p.value->>'shots')::int AS shots,
-            (p.value->>'key_passes')::int AS key_passes
+            (p.value->>'key_passes')::int AS key_passes,
+            r.league_name,
+            r.season
         FROM {SCHEMA}.prod_rosters r,
              LATERAL jsonb_each(r.away_roster) AS p
         ON CONFLICT (match_id, team_side, player_id) DO UPDATE SET
@@ -433,7 +459,9 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
             xg = EXCLUDED.xg,
             xa = EXCLUDED.xa,
             shots = EXCLUDED.shots,
-            key_passes = EXCLUDED.key_passes
+            key_passes = EXCLUDED.key_passes,
+            league_name = EXCLUDED.league_name,
+            season = EXCLUDED.season
         """
     ),
 
@@ -443,6 +471,7 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
         INSERT INTO {SCHEMA}.silver_fact_team_context (
             team_name,
             season,
+            league_name,
             context_type,
             context_label,
             metrics
@@ -450,6 +479,7 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
         SELECT
             tc.team_name,
             tc.season,
+            tc.league_name,
             ctx.key AS context_type,
             item.value ->> ctx.key AS context_label,
             item.value - ctx.key AS metrics
@@ -457,7 +487,7 @@ SILVER_TRANSFORMS: List[Tuple[str, str]] = [
              LATERAL jsonb_each(tc.context_stats) AS ctx(key, value),
              LATERAL jsonb_array_elements(ctx.value) AS item(value)
         WHERE item.value ->> ctx.key IS NOT NULL
-        ON CONFLICT (team_name, season, context_type, context_label) DO UPDATE SET
+        ON CONFLICT (team_name, season, league_name, context_type, context_label) DO UPDATE SET
             metrics = EXCLUDED.metrics
         """
     ),
@@ -471,12 +501,13 @@ SILVER_DDL: List[str] = [
     CREATE TABLE IF NOT EXISTS {SCHEMA}.silver_fact_team_context (
         team_name TEXT NOT NULL,
         season TEXT NOT NULL,
+        league_name TEXT NOT NULL,
         context_type TEXT NOT NULL,
         context_label TEXT NOT NULL,
         metrics JSONB NOT NULL DEFAULT '{{}}',
         created_at TIMESTAMPTZ DEFAULT NOW(),
         updated_at TIMESTAMPTZ DEFAULT NOW(),
-        PRIMARY KEY (team_name, season, context_type, context_label)
+        PRIMARY KEY (team_name, season, league_name, context_type, context_label)
     )
     """,
     f"""
@@ -486,6 +517,10 @@ SILVER_DDL: List[str] = [
     f"""
     CREATE INDEX IF NOT EXISTS idx_silver_fact_team_context_type
         ON {SCHEMA}.silver_fact_team_context(context_type)
+    """,
+    f"""
+    CREATE INDEX IF NOT EXISTS idx_silver_fact_team_context_league
+        ON {SCHEMA}.silver_fact_team_context(league_name)
     """,
 ]
 

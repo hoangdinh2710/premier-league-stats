@@ -1,9 +1,10 @@
 """
 Pipeline Orchestrator - Run the full ETL pipeline with medallion architecture.
+Supports multiple leagues and seasons.
 
 Pipeline flow:
 1. Extract: Pull data from Understat API -> data/raw/*.json
-2. Bronze Stage: Load JSON files -> bronze_stage.* (TRUNCATE + INSERT)
+2. Bronze Stage: Load JSON files -> bronze_stage.* (DELETE + INSERT)
 3. Bronze Merge: Merge stage -> bronze_prod.* (UPSERT)
 4. Silver Transform: Transform bronze_prod -> silver.* (UPSERT)
 """
@@ -14,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-def run_extract(season: int = None):
+def run_extract(season: int = None, league: str = None):
     """Run all extraction scripts."""
     print("\n" + "=" * 60)
     print("STEP 1: EXTRACT - Pulling data from Understat API")
@@ -36,6 +37,8 @@ def run_extract(season: int = None):
             args = [sys.executable, str(script_path)]
             if season:
                 args.extend(['--season', str(season)])
+            if league:
+                args.extend(['--league', league])
             result = subprocess.run(args, capture_output=False)
             if result.returncode != 0:
                 print(f"Warning: {script} exited with code {result.returncode}")
@@ -93,7 +96,8 @@ def run_pipeline(
     bronze_stage: bool = True,
     bronze_merge: bool = True,
     silver: bool = True,
-    season: int = None
+    season: int = None,
+    league: str = None
 ):
     """
     Run the full ETL pipeline.
@@ -104,11 +108,16 @@ def run_pipeline(
         bronze_merge: Whether to run bronze merge
         silver: Whether to run silver transform
         season: Season year for extraction (e.g., 2024)
+        league: League code for extraction (e.g., EPL, La_Liga)
     """
     start_time = datetime.now()
 
+    league_display = league or "EPL"
+    season_display = season or "default"
+
     print("\n" + "#" * 60)
-    print("# PREMIER LEAGUE STATS - MEDALLION PIPELINE")
+    print("# FOOTBALL STATS - MEDALLION PIPELINE")
+    print(f"# League: {league_display}  |  Season: {season_display}")
     print(f"# Started at: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("#" * 60)
 
@@ -117,7 +126,7 @@ def run_pipeline(
     try:
         # Step 1: Extract
         if extract:
-            run_extract(season)
+            run_extract(season, league)
             results['extract'] = 'completed'
         else:
             print("\nSkipping extraction step")
@@ -150,6 +159,7 @@ def run_pipeline(
 
         print("\n" + "#" * 60)
         print("# PIPELINE COMPLETE")
+        print(f"# League: {league_display}  |  Season: {season_display}")
         print(f"# Finished at: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
         print(f"# Duration: {duration}")
         print("#" * 60)
@@ -164,7 +174,7 @@ def run_pipeline(
 def main():
     """Main entry point with CLI argument parsing."""
     parser = argparse.ArgumentParser(
-        description='Run the Premier League Stats ETL pipeline'
+        description='Run the Football Stats ETL pipeline (supports multiple leagues and seasons)'
     )
 
     parser.add_argument(
@@ -209,6 +219,13 @@ def main():
         help='Season year to extract (e.g., 2024 for 2024/25 season)'
     )
 
+    parser.add_argument(
+        '--league',
+        type=str,
+        default='EPL',
+        help='League code to extract (e.g., EPL, La_Liga, Bundesliga, Serie_A, Ligue_1, RFPL)'
+    )
+
     args = parser.parse_args()
 
     # Determine which steps to run
@@ -218,7 +235,8 @@ def main():
             bronze_stage=True,
             bronze_merge=True,
             silver=False,
-            season=args.season
+            season=args.season,
+            league=args.league
         )
     elif args.silver_only:
         run_pipeline(
@@ -226,7 +244,8 @@ def main():
             bronze_stage=False,
             bronze_merge=False,
             silver=True,
-            season=args.season
+            season=args.season,
+            league=args.league
         )
     else:
         run_pipeline(
@@ -234,7 +253,8 @@ def main():
             bronze_stage=not args.no_bronze_stage,
             bronze_merge=not args.no_bronze_merge,
             silver=not args.no_silver,
-            season=args.season
+            season=args.season,
+            league=args.league
         )
 
 

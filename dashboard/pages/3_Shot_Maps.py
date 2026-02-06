@@ -12,9 +12,13 @@ st.set_page_config(page_title="Shot Maps", page_icon="🎯", layout="wide")
 st.title("🎯 Shot Maps")
 st.markdown("Visualize shot locations and quality on the pitch with xG values.")
 
+# Get league/season from session state (set in app.py sidebar)
+league_name = st.session_state.get("league_name")
+season = st.session_state.get("season")
+
 # Load shot data
 try:
-    shots_df = get_shots_data()
+    shots_df = get_shots_data(league_name=league_name, season=season)
     
     if shots_df.empty:
         st.warning("No shot data available. Please run `python -m extract.extract_shots` first.")

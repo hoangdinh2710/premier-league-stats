@@ -12,10 +12,14 @@ st.set_page_config(page_title="Team Analysis", page_icon="📈", layout="wide")
 st.title("📈 Team Analysis")
 st.markdown("Analyze individual team performance, comparing actual goals with expected goals (xG).")
 
+# Get league/season from session state (set in app.py sidebar)
+league_name = st.session_state.get("league_name")
+season = st.session_state.get("season")
+
 # Load data
 try:
-    teams_df = get_teams_data()
-    matches_df = get_matches_data()
+    teams_df = get_teams_data(league_name=league_name, season=season)
+    matches_df = get_matches_data(league_name=league_name, season=season)
     
     if teams_df.empty:
         st.warning("No team data available. Please run the extraction scripts first.")

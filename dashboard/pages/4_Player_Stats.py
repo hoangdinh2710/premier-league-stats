@@ -12,9 +12,13 @@ st.set_page_config(page_title="Player Stats", page_icon="⚡", layout="wide")
 st.title("⚡ Player Statistics")
 st.markdown("Analyze player performance, identify clinical finishers and wasteful shooters.")
 
+# Get league/season from session state (set in app.py sidebar)
+league_name = st.session_state.get("league_name")
+season = st.session_state.get("season")
+
 # Load player data
 try:
-    players_df = get_players_data()
+    players_df = get_players_data(league_name=league_name, season=season)
     
     if players_df.empty:
         st.warning("No player data available. Please run `python -m extract.extract_players` first.")

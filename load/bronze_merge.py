@@ -2,6 +2,7 @@
 Bronze Merge - Merge data from stg_* to prod_* tables.
 Uses UPSERT (INSERT ... ON CONFLICT DO UPDATE) strategy.
 All tables in premier_league_stats schema.
+Supports multiple leagues and seasons.
 """
 import os
 from typing import Dict, List
@@ -75,36 +76,40 @@ def return_connection(conn):
 # Table configurations: columns and primary keys
 TABLE_CONFIGS = {
     'teams': {
-        'columns': ['id', 'title', 'history'],
-        'pk': ['id'],
+        'columns': ['id', 'title', 'history', 'league_name', 'season'],
+        'pk': ['id', 'league_name', 'season'],
     },
     'players': {
         'columns': [
             'id', 'player_name', 'games', 'time', 'goals', 'xG', 'assists', 'xA',
             'shots', 'key_passes', 'yellow_cards', 'red_cards', 'position',
-            'team_title', 'npg', 'npxG', 'xGChain', 'xGBuildup'
+            'team_title', 'npg', 'npxG', 'xGChain', 'xGBuildup',
+            'league_name', 'season'
         ],
-        'pk': ['id'],
+        'pk': ['id', 'league_name', 'season'],
     },
     'matches': {
-        'columns': ['id', 'isResult', 'h', 'a', 'goals', 'xG', 'datetime', 'forecast'],
-        'pk': ['id'],
+        'columns': ['id', 'isResult', 'h', 'a', 'goals', 'xG', 'datetime', 'forecast',
+                     'league_name', 'season'],
+        'pk': ['id', 'league_name', 'season'],
     },
     'shots': {
         'columns': [
             'id', 'minute', 'result', 'X', 'Y', 'xG', 'player', 'h_a', 'player_id',
             'situation', 'season', 'shotType', 'match_id', 'h_team', 'a_team',
-            'h_goals', 'a_goals', 'date', 'player_assisted', 'lastAction'
+            'h_goals', 'a_goals', 'date', 'player_assisted', 'lastAction',
+            'league_name'
         ],
         'pk': ['id'],
     },
     'rosters': {
-        'columns': ['match_id', 'home_team', 'away_team', 'datetime', 'home_roster', 'away_roster'],
-        'pk': ['match_id'],
+        'columns': ['match_id', 'home_team', 'away_team', 'datetime', 'home_roster', 'away_roster',
+                     'league_name', 'season'],
+        'pk': ['match_id', 'league_name', 'season'],
     },
     'team_context': {
-        'columns': ['team_name', 'season', 'context_stats'],
-        'pk': ['team_name', 'season'],
+        'columns': ['team_name', 'season', 'league_name', 'context_stats'],
+        'pk': ['team_name', 'season', 'league_name'],
     },
 }
 
