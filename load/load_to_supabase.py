@@ -348,60 +348,6 @@ def load_shots(filename: str):
             return_connection(conn)
 
 
-def load_player_grouped(filename: str):
-    """
-    Load grouped player statistics to Supabase using direct Postgres connection.
-    
-    Args:
-        filename: Path to player_grouped JSON file
-    """
-    print(f"Loading grouped player data from {filename}...")
-    
-    # Read JSON file
-    with open(filename, 'r', encoding='utf-8') as f:
-        player_grouped = json.load(f)
-    
-    if not player_grouped:
-        print("Warning: No grouped player data to load")
-        return
-    
-    # Prepare data
-    columns, values_list = prepare_data_for_insert(player_grouped, 'raw_player_grouped')
-    
-    # Build INSERT ... ON CONFLICT DO UPDATE query
-    placeholders = ', '.join(['%s'] * len(columns))
-    columns_str = ', '.join([f'"{col}"' for col in columns])
-    
-    # Composite primary key: player_id, team
-    conflict_cols = 'player_id, team'
-    update_set = ', '.join([f'"{col}" = EXCLUDED."{col}"' for col in columns])
-    
-    query = f"""
-        INSERT INTO raw_player_grouped ({columns_str})
-        VALUES ({placeholders})
-        ON CONFLICT ({conflict_cols}) DO UPDATE SET {update_set}
-    """
-    
-    conn = None
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
-        
-        # Execute batch insert
-        execute_batch(cursor, query, values_list, page_size=100)
-        conn.commit()
-        
-        print(f"Success: Loaded {len(player_grouped)} grouped player records to raw_player_grouped table")
-    except Exception as e:
-        if conn:
-            conn.rollback()
-        print(f"Error loading grouped player data: {e}")
-        raise
-    finally:
-        if conn:
-            return_connection(conn)
-
-
 def load_rosters(filename: str):
     """
     Load roster/lineup data to Supabase using direct Postgres connection.
@@ -521,7 +467,6 @@ def load_all(data_dir="data/raw"):
     # Find the most recent files
     team_files = sorted(data_path.glob("teams_*.json"), reverse=True)
     player_files = sorted(data_path.glob("players_*.json"), reverse=True)
-    player_grouped_files = sorted(data_path.glob("player_grouped_*.json"), reverse=True)
     match_files = sorted(data_path.glob("matches_*.json"), reverse=True)
     roster_files = sorted(data_path.glob("rosters_*.json"), reverse=True)
     shot_files = sorted(data_path.glob("shots_*.json"), reverse=True)
@@ -541,11 +486,6 @@ def load_all(data_dir="data/raw"):
         load_players(player_files[0])
     else:
         print("Warning: No player data files found")
-    
-    if player_grouped_files:
-        load_player_grouped(player_grouped_files[0])
-    else:
-        print("Warning: No grouped player data files found")
     
     if match_files:
         load_matches(match_files[0])

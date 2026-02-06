@@ -6,7 +6,6 @@ from .extract_players import extract_player_data, save_player_data
 from .extract_matches import extract_match_data, save_match_data
 from .extract_shots import extract_shot_data, save_shot_data
 from .extract_rosters import extract_roster_data, save_roster_data
-from .extract_player_grouped import extract_player_grouped_data, save_player_grouped_data
 from .extract_team_context import extract_team_context_data, save_team_context_data
 
 __all__ = [
@@ -25,9 +24,6 @@ __all__ = [
     # Roster data (NEW)
     'extract_roster_data',
     'save_roster_data',
-    # Player grouped data (NEW)
-    'extract_player_grouped_data',
-    'save_player_grouped_data',
     # Team context data (NEW)
     'extract_team_context_data',
     'save_team_context_data',
